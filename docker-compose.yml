@@ -1,0 +1,53 @@
+x-base-env: &base_env
+  DATABASE_HOST: db
+  DATABASE_PORT: 5432
+  DATABASE_USER: postgres
+  DATABASE_PASSWORD: postgres
+#  DOWNGRADE_REVISION: <revision>
+
+x-alembic: &alembic
+  build:
+    dockerfile: Dockerfile.dev
+  depends_on:
+    db:
+      condition: service_healthy
+  volumes:
+    - ./migrations:/opt/db-models-template/migrations
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres -d postgres" ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+
+  alembic_main:
+    <<: *alembic
+    environment:
+      <<: *base_env
+      MIGRATION_ENV: main
+      DATABASE_NAME: main
+    profiles: [ main ]
+
+  alembic_dev:
+    <<: *alembic
+    environment:
+      <<: *base_env
+      MIGRATION_ENV: dev
+      DATABASE_NAME: dev
+    profiles: [ dev ]
+
+
+volumes:
+  pgdata:

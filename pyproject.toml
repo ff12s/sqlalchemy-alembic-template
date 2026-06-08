@@ -1,0 +1,89 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "db-models-template"
+dynamic = ["version"]
+description = "SQLAlchemy ORM models for DB migration across environments"
+requires-python = ">=3.11"
+dependencies = [
+    "SQLAlchemy>=2.0,<3.0",
+    "psycopg[binary]>=3.1,<4.0",
+    "setuptools>=68.0"
+]
+
+[project.optional-dependencies]
+alembic = ["alembic>=1.13,<2.0"]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.14",
+    "black>=24.0",
+    "ty>=0.0.5",
+    "pre-commit>=3.5",
+]
+
+[project.scripts]
+create-migration = "db_models.cli.create_migration:main"
+upgrade-migration = "db_models.cli.upgrade_migration:main"
+downgrade-migration = "db_models.cli.downgrade_migration:main"
+run-migration = "db_models.cli.run_migration:main"
+create-schema = "db_models.cli.create_schema:main"
+generate-models = "db_models.generate_models.main:main"
+generate-stubs = "db_models.cli.generate_stubs:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.setuptools.packages.find]
+include = ["db_models*", "migrations*"]
+
+[tool.setuptools.package-data]
+"db_models" = ["py.typed"]
+"migrations" = ["script.py.mako", "README", "versions/*/*.py"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+exclude = [
+    ".*",
+    "build",
+    "dist",
+    "venv",
+    "migrations/versions",
+]
+lint.select = [
+    "E",    # pycodestyle
+    "N",    # pep8-naming
+    "F",    # pyflakes
+    "UP",   # pyupgrade
+    "I001", # isort
+    "ANN",  # flake8-annotations
+    "S",    # flake8-bandit
+    "B",    # flake8-bugbear
+    "SIM",  # flake8-simplify
+    "TCH",  # flake8-type-checking
+]
+lint.ignore = ["ANN204", "ANN002", "ANN003", "S101", "N805"]
+lint.dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+lint.isort.combine-as-imports = true
+
+# Точечные послабления для легитимных паттернов, а не отключение правил глобально.
+[tool.ruff.lint.per-file-ignores]
+# Сгенерированные стабы: длинные ре-экспорты и их сортировку не правим руками.
+"*.pyi" = ["E402", "E501", "I001"]
+# Тесты: pytest-фикстуры (tmp_path, monkeypatch) не аннотируются стандартными типами.
+"tests/**/*.py" = ["ANN001", "ANN201"]
+# CLI дёргает доверенный alembic — shell-инъекции невозможны.
+"db_models/cli/**/*.py" = ["S603"]
+# SQLAlchemy Inspector не имеет лёгкого статического типа без связывания с рантаймом.
+"db_models/generate_models/reflection.py" = ["ANN401"]
+
+[tool.black]
+line-length = 120
+target-version = ["py311"]
+
+# Привязываем ty к этому проекту и его venv, чтобы статический анализ не подхватывал
+# конфигурацию/окружение вышестоящих каталогов, если шаблон лежит внутри другого репозитория.
+[tool.ty.environment]
+python = ".venv"

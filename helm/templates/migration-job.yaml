@@ -1,0 +1,51 @@
+{{- $jobType := ternary "downgrade" "upgrade" (not (empty .Values.downgradeRevision)) }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ printf "%s-%s-%s" .Values.metadata.name .Values.version $jobType | replace "." "-" }}
+  labels:
+    app: {{ .Values.metadata.labels.app }}
+    developer: {{ .Values.metadata.labels.developer }}
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 600
+  activeDeadlineSeconds: {{ .Values.activeDeadlineSeconds | default 1800 }}
+  template:
+    spec:
+      restartPolicy: OnFailure
+      securityContext:
+        {{- toYaml (.Values.podSecurityContext | default (dict "runAsNonRoot" true "seccompProfile" (dict "type" "RuntimeDefault"))) | nindent 8 }}
+      imagePullSecrets:
+        - name: {{ .Values.imagePullSecrets }}
+      volumes:
+        - name: tls-storage-{{ .Values.metadata.name }}
+          secret:
+            secretName: {{ .Values.secrets_name }}-tls
+            defaultMode: 420
+      containers:
+        - name: {{ printf "%s-%s-%s" .Values.metadata.name .Values.version $jobType | replace "." "-" }}
+          image: "{{ .Values.image }}:{{ .Values.version }}"
+          imagePullPolicy: {{ .Values.imagePullPolicy | default "Always" }}
+          securityContext:
+            {{- toYaml (.Values.containerSecurityContext | default (dict "allowPrivilegeEscalation" false "readOnlyRootFilesystem" false "capabilities" (dict "drop" (list "ALL")))) | nindent 12 }}
+          resources:
+            {{- toYaml (.Values.resources | default (dict "requests" (dict "cpu" "100m" "memory" "256Mi") "limits" (dict "cpu" "500m" "memory" "512Mi"))) | nindent 12 }}
+          volumeMounts:
+            - name: tls-storage-{{ .Values.metadata.name }}
+              mountPath: /opt/tls
+          envFrom:
+            - configMapRef:
+                name: {{ .Values.secrets_name }}
+            - secretRef:
+                name: {{ .Values.secrets_name }}-credentials
+          env:
+            - name: MIGRATION_ENV
+              value: {{ .Values.migrationEnv }}
+            {{- if .Values.downgradeRevision }}
+            - name: DOWNGRADE_REVISION
+              value: {{ .Values.downgradeRevision | quote }}
+            {{- end }}
+            - name: CA_BUNDLE
+              value: /opt/tls/ca-bundle.pem
+            - name: REQUESTS_CA_BUNDLE
+              value: /opt/tls/ca-bundle.pem

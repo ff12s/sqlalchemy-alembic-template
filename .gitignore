@@ -1,0 +1,15 @@
+__pycache__/
+*.egg-info/
+dist/
+build/
+.ruff_cache/
+.pytest_cache/
+.ty_cache/
+docker-compose.override.yml
+.idea/
+.claude/
+.venv/
+.vscode/
+.cursor/
+.github/
+CLAUDE.md

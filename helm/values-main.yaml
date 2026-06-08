@@ -1,0 +1,11 @@
+metadata:
+  name: db-models-template
+  labels:
+    app: db-models-template
+    developer: example
+
+secrets_name: "db-models-template"
+version: "latest"
+image: "registry.example.com/db-models-template"
+imagePullSecrets: "registry-pull-secret"
+migrationEnv: "main"

@@ -1,0 +1,18 @@
+FROM python:3.12-slim AS migration
+
+WORKDIR /opt/db-models-template
+
+COPY pyproject.toml setup.py requirements.txt release_parameters.yml ./
+COPY db_models ./db_models
+COPY migrations ./migrations
+COPY alembic.ini ./
+
+RUN pip install --no-cache-dir -r requirements.txt \
+    && pip install --no-cache-dir --no-deps .
+
+CMD ["run-migration"]
+
+
+FROM migration AS wheel-builder
+
+RUN pip wheel . --no-deps -w dist
