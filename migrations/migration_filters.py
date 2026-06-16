@@ -11,10 +11,19 @@ from sqlalchemy import ForeignKeyConstraint
 
 FkSignature = tuple[str, str, str, str, tuple[str, ...], tuple[str, ...], str | None, str | None]
 
-# Срезаем явные приведения типов ``::type``, которые PostgreSQL добавляет в server_default,
-# а SQLAlchemy не рендерит: ``::numeric(11,2)``, ``::character varying(50)``, ``::integer[]`` и т.п.
-# Аргумент приведения допускает один уровень вложенных скобок (``::t(f(x))``).
-_CAST_SUFFIX = re.compile(r"::\s*[A-Za-z_]\w*(?:\s+[A-Za-z_]\w*)*(?:\s*\((?:[^()]|\([^()]*\))*\))?(?:\[\])*")
+# Имя типа в приведении ``::type``: идентификатор (со схемой ``public.t`` либо в кавычках
+# ``"MyEnum"``), многословные типы, аргументы точности и массив ``[]``.
+_CAST_TYPE = (
+    r'(?:[A-Za-z_]\w*|"[^"]*")'
+    r'(?:\s*\.\s*(?:[A-Za-z_]\w*|"[^"]*"))*'
+    r"(?:\s+[A-Za-z_]\w*)*"
+    r"(?:\s*\((?:[^()]|\([^()]*\))*\))?"
+    r"(?:\s*\[\])*"
+)
+# Приведение ``::type`` в не-литералах (``nextval('s'::regclass)``, ``ARRAY[...]::integer[]``).
+_CAST_SUFFIX = re.compile(rf"::\s*{_CAST_TYPE}")
+# Цельный строковый литерал с необязательным приведением ``'val'::type`` (group 1 — значение).
+_STRING_LITERAL = re.compile(rf"'((?:[^']|'')*)'(?:\s*::\s*{_CAST_TYPE})?")
 
 
 def normalize_schema_name(schema_name: str | None) -> str:
@@ -37,13 +46,18 @@ def table_key(schema: str | None, table_name: str) -> str:
 
 
 def normalize_server_default(val: str | None) -> str | None:
-    """Нормализует server_default, убирая PostgreSQL-приведения типов для сравнения.
+    """Приводит server_default к каноническому виду для сравнения: у цельного литерала
+    ``'val'::type`` берёт значение ``val``, у прочего срезает ``::type``-приведения.
 
     :param val: отрефлексированное или отрендеренное значение server_default
-    :return: значение без хвостовых ``::type``-приведений либо ``None``
+    :return: нормализованное значение для сравнения либо ``None``
     """
     if val is None:
         return None
+    val = val.strip()
+    literal = _STRING_LITERAL.fullmatch(val)
+    if literal:
+        return literal.group(1).replace("''", "'")
     return _CAST_SUFFIX.sub("", val).strip()
 
 
@@ -52,7 +66,7 @@ def compare_server_default(
     inspected_column: Any,  # noqa: ANN401, ARG001
     metadata_column: Any,  # noqa: ANN401, ARG001
     inspected_default: str | None,
-    metadata_default: str | None,  # noqa: ARG001
+    metadata_default: Any,  # noqa: ANN401, ARG001
     rendered_metadata_default: str | None,
 ) -> bool:
     """Сравнивает server_default БД и модели, игнорируя SERIAL/sequence и приведения типов.
