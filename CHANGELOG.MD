@@ -2,6 +2,17 @@
 
 ---
 
+# 0.1.1
+
+## Fixed
+
+- `migrations/migration_filters.py` (`normalize_server_default`/`compare_server_default`): убран вечный
+  шумовой `alter_column` autogenerate для строковых/enum-дефолтов. Цельный литерал `'val'::type` сводится к
+  `val` якорным сопоставлением — внутренние `::` и кавычки (`'a::b'`, `'O''Brien'`) не искажаются,
+  схемо-квалифицированные и кавыченные касты (`'val'::public.t`, `'val'::"MyEnum"`) снимаются. Сравнение
+  оставлено чисто строковым: делегирование нативному компаратору диалекта вычисляло `nextval()` на сервере,
+  расходуя sequence и давая ложный diff на `run_params.run_id`
+
 # 0.1.0
 
 ## Added
